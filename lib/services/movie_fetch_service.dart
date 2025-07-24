@@ -3,8 +3,17 @@ import 'package:http/http.dart' as http;
 import '../models/movie.dart';
 
 class MovieFetchService {
-  static const String baseUrl = 'https://api-15hv.onrender.com/api';
-  //static const String baseUrl = 'https://api-15hv.onrender.com/api/moviessss';
+  static const String baseUrl =
+      'https://proxy-server-6hu9.onrender.com/proxy/api';
+  static const Map<String, String> headers = {
+    'Authorization':
+        'Bearer dfghjk45678vbnm5678ixcvbnjmkr5t6y7u8icvbnjm56y7uvbhnjmkr5678vbhnj',
+  };
+
+  // Convert Cloudflare UID to proxied video URL
+  static String proxiedVideoUrl(String uid) {
+    return 'https://proxy-server-6hu9.onrender.com/proxy/video/$uid/manifest/video.m3u8';
+  }
 
   static bool lastApiHadServerError = false;
 
@@ -23,7 +32,7 @@ class MovieFetchService {
     lastApiHadServerError = false;
 
     try {
-      final response = await http.get(Uri.parse(endpoint));
+      final response = await http.get(Uri.parse(endpoint), headers: headers);
       print('Status: ${response.statusCode}');
       print('Body: ${response.body}');
 
@@ -51,13 +60,10 @@ class MovieFetchService {
   }
 
   static Future<void> incrementViews(String movieId) async {
-    final uri = Uri.https(
-      'api-15hv.onrender.com',
-      '/api/movies/$movieId/increment-views',
-    );
+    final uri = Uri.parse('$baseUrl/movies/$movieId/increment-views');
 
     try {
-      final response = await http.put(uri);
+      final response = await http.put(uri, headers: headers);
       if (response.statusCode != 200) {
         print('Failed to increment views for movieId: $movieId');
       }
@@ -86,7 +92,7 @@ class MovieFetchService {
     lastApiHadServerError = false;
 
     try {
-      final response = await http.get(uri);
+      final response = await http.get(uri, headers: headers);
       print('Status: ${response.statusCode}');
       print('Body: ${response.body}');
 
@@ -127,7 +133,7 @@ class MovieFetchService {
     lastApiHadServerError = false;
 
     try {
-      final response = await http.get(uri);
+      final response = await http.get(uri, headers: headers);
       print('Status: ${response.statusCode}');
       print('Body: ${response.body}');
 
@@ -155,7 +161,7 @@ class MovieFetchService {
     lastApiHadServerError = false;
 
     try {
-      final response = await http.get(Uri.parse(url));
+      final response = await http.get(Uri.parse(url), headers: headers);
       print('Status: ${response.statusCode}');
       print('Body: ${response.body}');
 
@@ -197,7 +203,7 @@ class MovieFetchService {
     lastApiHadServerError = false;
 
     try {
-      final response = await http.get(uri);
+      final response = await http.get(uri, headers: headers);
       print('Status: ${response.statusCode}');
       print('Body: ${response.body}');
 
@@ -225,7 +231,7 @@ class MovieFetchService {
     lastApiHadServerError = false;
 
     try {
-      final response = await http.get(uri);
+      final response = await http.get(uri, headers: headers);
       print('Status: ${response.statusCode}');
       print('Body: ${response.body}');
 

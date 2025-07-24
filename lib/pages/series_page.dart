@@ -6,6 +6,7 @@ import '../widgets/movie_card.dart';
 import '../widgets/modern_ad_banner.dart';
 import '../screens/search/search_page.dart';
 import '../pages/movie_detail_screen.dart';
+import '../services/analytics_service.dart';
 
 class SeriesPage extends StatefulWidget {
   const SeriesPage({super.key});
@@ -20,6 +21,8 @@ class _SeriesPageState extends State<SeriesPage> {
   @override
   void initState() {
     super.initState();
+    // 🔁 Track "movie_viewed" when BollywoodPage is opened
+    AnalyticsService.trackEvent("movie_viewed", {"page": "bollywood"});
     _seriesFuture = _fetchSeriesWithStatus();
   }
 

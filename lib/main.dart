@@ -18,8 +18,13 @@ void main() async {
     testMode: false,
   );
 
+  //await checkAppVersion();
+  //await trackInstallIfFirstTime();
   await checkAppVersion();
   await trackInstallIfFirstTime();
+  await AnalyticsService.trackEvent('app_open', {
+    'platform': Platform.isAndroid ? "Android" : "iOS",
+  });
 
   runApp(const MyApp());
 }
