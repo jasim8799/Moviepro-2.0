@@ -6,6 +6,7 @@ import '../services/movie_fetch_service.dart';
 import '../widgets/movie_card.dart';
 import '../widgets/modern_ad_banner.dart';
 import '../pages/movie_detail_screen.dart';
+import 'package:shimmer/shimmer.dart';
 
 class HollywoodPage extends StatefulWidget {
   const HollywoodPage({super.key});
@@ -15,44 +16,133 @@ class HollywoodPage extends StatefulWidget {
 }
 
 class _HollywoodPageState extends State<HollywoodPage> {
-  late Future<MovieFetchResult> _moviesFuture;
+  final List<Movie> _movies = [];
+  bool _isLoading = true;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  bool _isOffline = false;
+  bool _isServerError = false;
+  int _currentPage = 1;
+  final int _limit = 20;
+  final ScrollController _scrollController = ScrollController();
+  int _retryCount = 0;
 
   @override
   void initState() {
     super.initState();
-    _moviesFuture = _fetchMoviesWithStatus();
+    _fetchMovies();
+
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >=
+              _scrollController.position.maxScrollExtent - 100 &&
+          !_isLoadingMore &&
+          _hasMore &&
+          !_isOffline &&
+          !_isServerError) {
+        _loadMoreMovies();
+      }
+    });
   }
 
-  Future<MovieFetchResult> _fetchMoviesWithStatus() async {
+  Future<void> _fetchMovies() async {
     final connectivityResult = await Connectivity().checkConnectivity();
     if (connectivityResult == ConnectivityResult.none) {
-      return MovieFetchResult(
-        movies: [],
-        isOffline: true,
-        isServerError: false,
-      );
+      setState(() {
+        _isOffline = true;
+        _isLoading = false;
+      });
+      return;
     }
 
     try {
       final movies = await MovieFetchService.fetchMoviesByCategoryAndRegion(
         'All',
         'Hollywood',
+        page: _currentPage,
+        limit: _limit,
       );
 
       final serverError = MovieFetchService.hadServerError();
 
-      return MovieFetchResult(
-        movies: movies,
-        isOffline: false,
-        isServerError: serverError,
-      );
-    } catch (e) {
-      return MovieFetchResult(
-        movies: [],
-        isOffline: false,
-        isServerError: true,
-      );
+      setState(() {
+        _movies.addAll(movies);
+        _hasMore = movies.length == _limit;
+        _isServerError = serverError;
+        _isLoading = false;
+        _currentPage++;
+        _retryCount = 0;
+      });
+    } catch (_) {
+      if (_retryCount < 2) {
+        _retryCount++;
+        await Future.delayed(const Duration(seconds: 1));
+        _fetchMovies();
+      } else {
+        setState(() {
+          _isServerError = true;
+          _isLoading = false;
+        });
+      }
     }
+  }
+
+  Future<void> _loadMoreMovies() async {
+    setState(() => _isLoadingMore = true);
+
+    try {
+      final moreMovies = await MovieFetchService.fetchMoviesByCategoryAndRegion(
+        'All',
+        'Hollywood',
+        page: _currentPage,
+        limit: _limit,
+      );
+
+      setState(() {
+        _movies.addAll(moreMovies);
+        _hasMore = moreMovies.isNotEmpty;
+        _isLoadingMore = false;
+        _currentPage++;
+      });
+    } catch (_) {
+      setState(() => _isLoadingMore = false);
+    }
+  }
+
+  Future<void> _onRefresh() async {
+    setState(() {
+      _movies.clear();
+      _currentPage = 1;
+      _hasMore = true;
+      _isLoading = true;
+      _isServerError = false;
+      _isOffline = false;
+      _retryCount = 0;
+    });
+    await _fetchMovies();
+  }
+
+  Widget _buildShimmerGrid() {
+    return GridView.builder(
+      padding: const EdgeInsets.all(8),
+      itemCount: 9,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        childAspectRatio: 0.6,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+      ),
+      itemBuilder:
+          (_, __) => Shimmer.fromColors(
+            baseColor: Colors.grey[800]!,
+            highlightColor: Colors.grey[600]!,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[900],
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+    );
   }
 
   @override
@@ -63,85 +153,96 @@ class _HollywoodPageState extends State<HollywoodPage> {
         child: Column(
           children: [
             Expanded(
-              child: FutureBuilder<MovieFetchResult>(
-                future: _moviesFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(
-                      child: CircularProgressIndicator(color: Colors.redAccent),
-                    );
-                  } else if (snapshot.hasError) {
-                    return const Center(
-                      child: Text(
-                        '🔴 Unexpected error.',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    );
-                  } else if (snapshot.hasData) {
-                    final result = snapshot.data!;
-                    if (result.isOffline) {
-                      return const Center(
+              child:
+                  _isLoading
+                      ? _buildShimmerGrid()
+                      : _isOffline
+                      ? const Center(
                         child: Text(
                           '🔴 You are offline. Please check your internet connection.',
                           style: TextStyle(color: Colors.white),
                           textAlign: TextAlign.center,
                         ),
-                      );
-                    } else if (result.isServerError) {
-                      return const Center(
-                        child: Text(
-                          '🔴 Failed to load movies. Server error occurred.',
-                          style: TextStyle(color: Colors.white),
-                          textAlign: TextAlign.center,
+                      )
+                      : _isServerError
+                      ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text(
+                              '🔴 Failed to load movies. Server error occurred.',
+                              style: TextStyle(color: Colors.white),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 12),
+                            ElevatedButton(
+                              onPressed: () {
+                                setState(() {
+                                  _isLoading = true;
+                                  _isServerError = false;
+                                  _retryCount = 0;
+                                });
+                                _fetchMovies();
+                              },
+                              child: const Text('Retry'),
+                            ),
+                          ],
                         ),
-                      );
-                    } else if (result.movies.isEmpty) {
-                      return const Center(
+                      )
+                      : _movies.isEmpty
+                      ? const Center(
                         child: Text(
                           'No Hollywood movies found.',
                           style: TextStyle(color: Colors.white),
                         ),
-                      );
-                    } else {
-                      return GridView.builder(
-                        padding: const EdgeInsets.all(8),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 3,
-                              childAspectRatio: 0.6,
-                              crossAxisSpacing: 8,
-                              mainAxisSpacing: 8,
-                            ),
-                        itemCount: result.movies.length,
-                        itemBuilder: (context, index) {
-                          final movie = result.movies[index];
-                          return GestureDetector(
-                            onTap: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder:
-                                      (_) => MovieDetailScreen(
-                                        movie: movie,
-                                        relatedMovies: result.movies,
-                                      ),
+                      )
+                      : RefreshIndicator(
+                        onRefresh: _onRefresh,
+                        color: Colors.redAccent,
+                        backgroundColor: Colors.black,
+                        child: GridView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.all(8),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 3,
+                                childAspectRatio: 0.6,
+                                crossAxisSpacing: 8,
+                                mainAxisSpacing: 8,
+                              ),
+                          itemCount: _movies.length + (_isLoadingMore ? 3 : 0),
+                          itemBuilder: (context, index) {
+                            if (index >= _movies.length) {
+                              return Shimmer.fromColors(
+                                baseColor: Colors.grey[800]!,
+                                highlightColor: Colors.grey[600]!,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[900],
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
                                 ),
                               );
-                            },
-                            child: MovieCard(movie: movie),
-                          );
-                        },
-                      );
-                    }
-                  } else {
-                    return const Center(
-                      child: Text(
-                        'Something went wrong.',
-                        style: TextStyle(color: Colors.white),
+                            }
+
+                            final movie = _movies[index];
+                            return GestureDetector(
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder:
+                                        (_) => MovieDetailScreen(
+                                          movie: movie,
+                                          relatedMovies: _movies,
+                                        ),
+                                  ),
+                                );
+                              },
+                              child: MovieCard(movie: movie),
+                            );
+                          },
+                        ),
                       ),
-                    );
-                  }
-                },
-              ),
             ),
             const ModernAdBanner(),
           ],
@@ -162,16 +263,4 @@ class _HollywoodPageState extends State<HollywoodPage> {
       ),
     );
   }
-}
-
-class MovieFetchResult {
-  final List<Movie> movies;
-  final bool isOffline;
-  final bool isServerError;
-
-  MovieFetchResult({
-    required this.movies,
-    required this.isOffline,
-    required this.isServerError,
-  });
 }

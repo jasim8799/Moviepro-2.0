@@ -43,7 +43,7 @@ class _HomePageState extends State<HomePage> {
             icon: Icon(Icons.movie_filter),
             label: 'Hollywood',
           ),
-          BottomNavigationBarItem(icon: Icon(Icons.tv), label: 'Series'),
+          BottomNavigationBarItem(icon: Icon(Icons.tv), label: 'Series/Anime'),
         ],
       ),
     );

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:shimmer/shimmer.dart';
+
 import '../models/movie.dart';
 
 class MovieCard extends StatelessWidget {
@@ -14,10 +17,27 @@ class MovieCard extends StatelessWidget {
         Expanded(
           child:
               movie.posterPath.isNotEmpty
-                  ? Image.network(
-                    movie.posterPath,
+                  ? CachedNetworkImage(
+                    imageUrl: movie.posterPath,
                     fit: BoxFit.cover,
                     width: double.infinity,
+                    placeholder:
+                        (context, url) => Shimmer.fromColors(
+                          baseColor: Colors.grey[300]!,
+                          highlightColor: Colors.grey[100]!,
+                          child: Container(
+                            width: double.infinity,
+                            height: double.infinity,
+                            color: Colors.grey,
+                          ),
+                        ),
+                    errorWidget:
+                        (context, url, error) => const Center(
+                          child: Icon(
+                            Icons.broken_image,
+                            color: Colors.white70,
+                          ),
+                        ),
                   )
                   : Container(
                     color: Colors.grey,

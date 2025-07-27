@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:wakelock_plus/wakelock_plus.dart'; // ✅ Added
 import 'package:my_new_movie_app/pages/movie_player_widget.dart';
 import '../models/movie.dart';
 import '../services/movie_fetch_service.dart';
@@ -23,6 +24,10 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
   @override
   void initState() {
     super.initState();
+
+    // ✅ Keep screen awake
+    WakelockPlus.enable();
+
     if (widget.movie.type == 'episode') {
       _otherSeriesFuture = MovieFetchService.fetchSeriesByCategoryAndRegion(
         'All',
@@ -35,6 +40,13 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
       'movieId': widget.movie.id,
       'movieTitle': widget.movie.title,
     });
+  }
+
+  @override
+  void dispose() {
+    // ✅ Allow screen to sleep again
+    WakelockPlus.disable();
+    super.dispose();
   }
 
   @override
@@ -53,10 +65,8 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Movie player area with tap to play
             GestureDetector(
               onTap: () async {
-                // Track movie play
                 await AnalyticsService.trackEvent('movie_play', {
                   'movieId': widget.movie.id,
                   'movieTitle': widget.movie.title,

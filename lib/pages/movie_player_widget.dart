@@ -109,7 +109,16 @@ class _MoviePlayerWidgetState extends State<MoviePlayerWidget> {
       await oldController?.dispose();
       _isDisposing = false;
 
-      final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+      final controller = VideoPlayerController.networkUrl(
+        Uri.parse(url),
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+        httpHeaders: {
+          'Accept': 'video/*',
+          'Connection': 'keep-alive',
+          'Cache-Control': 'no-cache',
+        },
+      );
+
       _videoPlayerController = controller;
 
       await controller.initialize();
@@ -177,7 +186,7 @@ class _MoviePlayerWidgetState extends State<MoviePlayerWidget> {
 
   void _resumePlaybackAfterAd(Duration resumeFrom) {
     if (!mounted) return;
-    WakelockPlus.enable(); // <--- ✅ Optional safety net
+    WakelockPlus.enable();
     if (_currentVideoUrl != null) {
       _initializePlayer(_currentVideoUrl!, resumeFrom: resumeFrom);
     }
@@ -265,7 +274,6 @@ class _MoviePlayerWidgetState extends State<MoviePlayerWidget> {
             )
           else
             _buildLoading(),
-
           if (_adCompleted && availableLanguages.isNotEmpty)
             _buildDropdownWidget(
               alignment: Alignment.bottomLeft,
@@ -279,7 +287,6 @@ class _MoviePlayerWidgetState extends State<MoviePlayerWidget> {
                 });
               },
             ),
-
           if (_adCompleted && availableQualities.isNotEmpty)
             _buildDropdownWidget(
               alignment: Alignment.bottomRight,

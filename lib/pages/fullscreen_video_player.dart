@@ -65,7 +65,15 @@ class _FullScreenVideoPageState extends State<FullScreenVideoPage> {
       _chewieController?.dispose();
       await _controller?.dispose();
 
-      final controller = VideoPlayerController.network(url);
+      final controller = VideoPlayerController.network(
+        url,
+        httpHeaders: {
+          'Accept': 'video/*',
+          'Connection': 'keep-alive',
+          'Cache-Control': 'no-cache',
+          'Accept-Encoding': 'identity',
+        },
+      );
       _controller = controller;
       await controller.initialize();
       await controller.setLooping(false);

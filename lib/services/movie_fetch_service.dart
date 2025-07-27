@@ -10,7 +10,6 @@ class MovieFetchService {
         'Bearer dfghjk45678vbnm5678ixcvbnjmkr5t6y7u8icvbnjm56y7uvbhnjmkr5678vbhnj',
   };
 
-  // Convert Cloudflare UID to proxied video URL
   static String proxiedVideoUrl(String uid) {
     return 'https://proxy-server-6hu9.onrender.com/proxy/video/$uid/manifest/video.m3u8';
   }
@@ -74,9 +73,15 @@ class MovieFetchService {
 
   static Future<List<Movie>> fetchMoviesByCategoryAndRegion(
     String category,
-    String region,
-  ) async {
-    final Map<String, String> queryParams = {'type': 'movie'};
+    String region, {
+    int page = 1,
+    int limit = 20,
+  }) async {
+    final Map<String, String> queryParams = {
+      'type': 'movie',
+      'page': page.toString(),
+      'limit': limit.toString(),
+    };
 
     if (category.isNotEmpty && category.toLowerCase() != 'all') {
       queryParams['category'] = category.toLowerCase();
@@ -113,11 +118,18 @@ class MovieFetchService {
     }
   }
 
+  // ✅ Updated with pagination support
   static Future<List<Movie>> fetchSeriesByCategoryAndRegion(
     String category,
-    String region,
-  ) async {
-    final Map<String, String> queryParams = {'type': 'series'};
+    String region, {
+    int page = 1,
+    int limit = 20,
+  }) async {
+    final Map<String, String> queryParams = {
+      'type': 'series',
+      'page': page.toString(),
+      'limit': limit.toString(),
+    };
 
     if (category.isNotEmpty && category.toLowerCase() != 'all') {
       queryParams['category'] = category.toLowerCase();
@@ -251,7 +263,6 @@ class MovieFetchService {
     }
   }
 
-  /// ✅ New method to check API/server error
   static bool hadServerError() {
     return lastApiHadServerError;
   }

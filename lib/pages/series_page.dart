@@ -7,6 +7,7 @@ import '../widgets/modern_ad_banner.dart';
 import '../screens/search/search_page.dart';
 import '../pages/movie_detail_screen.dart';
 import '../services/analytics_service.dart';
+import 'package:shimmer/shimmer.dart';
 
 class SeriesPage extends StatefulWidget {
   const SeriesPage({super.key});
@@ -16,45 +17,112 @@ class SeriesPage extends StatefulWidget {
 }
 
 class _SeriesPageState extends State<SeriesPage> {
-  late Future<MovieFetchResult> _seriesFuture;
+  final ScrollController _scrollController = ScrollController();
+  final List<Movie> _seriesList = [];
+  bool _isLoading = true;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  bool _isOffline = false;
+  bool _isServerError = false;
+  int _currentPage = 1;
+  final int _limit = 20;
 
   @override
   void initState() {
     super.initState();
-    // 🔁 Track "movie_viewed" when BollywoodPage is opened
     AnalyticsService.trackEvent("movie_viewed", {"page": "bollywood"});
-    _seriesFuture = _fetchSeriesWithStatus();
+    _fetchSeries();
+    _scrollController.addListener(_onScroll);
   }
 
-  Future<MovieFetchResult> _fetchSeriesWithStatus() async {
-    final connectivityResult = await Connectivity().checkConnectivity();
-    if (connectivityResult == ConnectivityResult.none) {
-      return MovieFetchResult(
-        movies: [],
-        isOffline: true,
-        isServerError: false,
-      );
+  Future<void> _onRefresh() async {
+    setState(() {
+      _seriesList.clear();
+      _currentPage = 1;
+      _hasMore = true;
+      _isLoading = true;
+      _isServerError = false;
+      _isOffline = false;
+    });
+    await _fetchSeries();
+  }
+
+  Future<void> _fetchSeries({bool loadMore = false}) async {
+    if (_isLoadingMore || (!_hasMore && loadMore)) return;
+
+    if (loadMore) {
+      setState(() {
+        _isLoadingMore = true;
+      });
+    } else {
+      setState(() {
+        _isLoading = true;
+      });
     }
 
-    try {
-      final series = await MovieFetchService.fetchSeriesByCategoryAndRegion(
-        'All',
-        'All',
-      );
+    final connectivityResult = await Connectivity().checkConnectivity();
+    if (connectivityResult == ConnectivityResult.none) {
+      setState(() {
+        _isOffline = true;
+        _isLoading = false;
+        _isLoadingMore = false;
+      });
+      return;
+    }
 
-      final serverError = MovieFetchService.hadServerError();
+    int retries = 0;
+    const maxRetries = 2;
+    bool success = false;
 
-      return MovieFetchResult(
-        movies: series,
-        isOffline: false,
-        isServerError: serverError,
-      );
-    } catch (e) {
-      return MovieFetchResult(
-        movies: [],
-        isOffline: false,
-        isServerError: true,
-      );
+    while (!success && retries <= maxRetries) {
+      try {
+        final newSeries =
+            await MovieFetchService.fetchSeriesByCategoryAndRegion(
+              'All',
+              'All',
+              page: _currentPage,
+              limit: _limit,
+            );
+        final serverError = MovieFetchService.hadServerError();
+
+        if (!serverError) {
+          setState(() {
+            _isServerError = false;
+            _isOffline = false;
+            if (newSeries.isEmpty) {
+              _hasMore = false;
+            } else {
+              _seriesList.addAll(newSeries);
+              _currentPage++;
+            }
+          });
+          success = true;
+        } else {
+          retries++;
+        }
+      } catch (_) {
+        retries++;
+      }
+    }
+
+    if (!success) {
+      setState(() {
+        _isServerError = true;
+      });
+    }
+
+    setState(() {
+      _isLoading = false;
+      _isLoadingMore = false;
+    });
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+            _scrollController.position.maxScrollExtent - 300 &&
+        !_isLoadingMore &&
+        _hasMore) {
+      _fetchSeries(loadMore: true);
     }
   }
 
@@ -124,6 +192,16 @@ class _SeriesPageState extends State<SeriesPage> {
                       itemBuilder: (ctx, index) {
                         final episode = episodes[index];
                         return ListTile(
+                          leading: Image.network(
+                            series.fullPosterPath,
+                            width: 50,
+                            fit: BoxFit.cover,
+                            errorBuilder:
+                                (_, __, ___) => const Icon(
+                                  Icons.broken_image,
+                                  color: Colors.grey,
+                                ),
+                          ),
                           title: Text(
                             episode.title,
                             style: const TextStyle(color: Colors.white),
@@ -154,6 +232,36 @@ class _SeriesPageState extends State<SeriesPage> {
     );
   }
 
+  Widget _buildShimmerGrid() {
+    return GridView.builder(
+      padding: const EdgeInsets.all(8),
+      itemCount: 9,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        childAspectRatio: 0.6,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+      ),
+      itemBuilder:
+          (context, index) => Shimmer.fromColors(
+            baseColor: Colors.grey[800]!,
+            highlightColor: Colors.grey[600]!,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[900],
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -162,77 +270,88 @@ class _SeriesPageState extends State<SeriesPage> {
         child: Column(
           children: [
             Expanded(
-              child: FutureBuilder<MovieFetchResult>(
-                future: _seriesFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(
-                      child: CircularProgressIndicator(color: Colors.redAccent),
-                    );
-                  } else if (snapshot.hasError) {
-                    return const Center(
-                      child: Text(
-                        '🔴 Unexpected error.',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    );
-                  } else if (snapshot.hasData) {
-                    final result = snapshot.data!;
-                    if (result.isOffline) {
-                      return const Center(
+              child:
+                  _isLoading
+                      ? _buildShimmerGrid()
+                      : _isOffline
+                      ? const Center(
                         child: Text(
                           '🔴 You are offline. Please check your internet connection.',
                           style: TextStyle(color: Colors.white),
                           textAlign: TextAlign.center,
                         ),
-                      );
-                    } else if (result.isServerError) {
-                      return const Center(
-                        child: Text(
-                          '🔴 Failed to load series. Server error occurred.',
-                          style: TextStyle(color: Colors.white),
-                          textAlign: TextAlign.center,
+                      )
+                      : _isServerError
+                      ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text(
+                              '🔴 Failed to load series. Server error occurred.',
+                              style: TextStyle(color: Colors.white),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 10),
+                            TextButton(
+                              onPressed: _fetchSeries,
+                              child: const Text(
+                                "Retry",
+                                style: TextStyle(
+                                  color: Colors.redAccent,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      );
-                    } else if (result.movies.isEmpty) {
-                      return const Center(
+                      )
+                      : _seriesList.isEmpty
+                      ? const Center(
                         child: Text(
                           'No series found.',
                           style: TextStyle(color: Colors.white),
                         ),
-                      );
-                    } else {
-                      final seriesList = result.movies;
-                      return GridView.builder(
-                        padding: const EdgeInsets.all(8),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 3,
-                              childAspectRatio: 0.6,
-                              crossAxisSpacing: 8,
-                              mainAxisSpacing: 8,
-                            ),
-                        itemCount: seriesList.length,
-                        itemBuilder: (context, index) {
-                          final series = seriesList[index];
-                          return GestureDetector(
-                            onTap:
-                                () => _showEpisodesBottomSheet(context, series),
-                            child: MovieCard(movie: series),
-                          );
-                        },
-                      );
-                    }
-                  } else {
-                    return const Center(
-                      child: Text(
-                        'Something went wrong.',
-                        style: TextStyle(color: Colors.white),
+                      )
+                      : RefreshIndicator(
+                        onRefresh: _onRefresh,
+                        color: Colors.redAccent,
+                        backgroundColor: Colors.black,
+                        child: GridView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.all(8),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 3,
+                                childAspectRatio: 0.6,
+                                crossAxisSpacing: 8,
+                                mainAxisSpacing: 8,
+                              ),
+                          itemCount:
+                              _seriesList.length + (_isLoadingMore ? 3 : 0),
+                          itemBuilder: (context, index) {
+                            if (index >= _seriesList.length) {
+                              return Shimmer.fromColors(
+                                baseColor: Colors.grey[800]!,
+                                highlightColor: Colors.grey[600]!,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[900],
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                              );
+                            }
+
+                            final series = _seriesList[index];
+                            return GestureDetector(
+                              onTap:
+                                  () =>
+                                      _showEpisodesBottomSheet(context, series),
+                              child: MovieCard(movie: series),
+                            );
+                          },
+                        ),
                       ),
-                    );
-                  }
-                },
-              ),
             ),
             const ModernAdBanner(),
           ],
@@ -253,16 +372,4 @@ class _SeriesPageState extends State<SeriesPage> {
       ),
     );
   }
-}
-
-class MovieFetchResult {
-  final List<Movie> movies;
-  final bool isOffline;
-  final bool isServerError;
-
-  MovieFetchResult({
-    required this.movies,
-    required this.isOffline,
-    required this.isServerError,
-  });
 }
