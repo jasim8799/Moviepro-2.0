@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:my_new_movie_app/screens/search/search_page.dart';
@@ -26,21 +27,34 @@ class _BollywoodPageState extends State<BollywoodPage> {
   final int _limit = 20;
   final ScrollController _scrollController = ScrollController();
 
+  Timer? _scrollThrottle;
+
   @override
   void initState() {
     super.initState();
     _fetchMovies();
 
     _scrollController.addListener(() {
-      if (_scrollController.position.pixels >=
-              _scrollController.position.maxScrollExtent - 100 &&
-          !_isLoadingMore &&
-          _hasMore &&
-          !_isOffline &&
-          !_isServerError) {
-        _loadMoreMovies();
-      }
+      if (_scrollThrottle?.isActive ?? false) return;
+
+      _scrollThrottle = Timer(const Duration(milliseconds: 300), () {
+        if (_scrollController.position.pixels >=
+                _scrollController.position.maxScrollExtent - 300 &&
+            !_isLoadingMore &&
+            _hasMore &&
+            !_isOffline &&
+            !_isServerError) {
+          _loadMoreMovies();
+        }
+      });
     });
+  }
+
+  @override
+  void dispose() {
+    _scrollThrottle?.cancel();
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchMovies() async {
@@ -77,6 +91,13 @@ class _BollywoodPageState extends State<BollywoodPage> {
             _isLoading = false;
             _currentPage++;
           });
+          // 👇 Force load more if content is short
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_scrollController.position.maxScrollExtent <=
+                _scrollController.position.viewportDimension) {
+              _loadMoreMovies();
+            }
+          });
           success = true;
         } else {
           retries++;
@@ -95,6 +116,8 @@ class _BollywoodPageState extends State<BollywoodPage> {
   }
 
   Future<void> _loadMoreMovies() async {
+    if (_isLoadingMore || !_hasMore) return;
+
     setState(() => _isLoadingMore = true);
 
     try {
@@ -105,14 +128,19 @@ class _BollywoodPageState extends State<BollywoodPage> {
         limit: _limit,
       );
 
-      setState(() {
-        _movies.addAll(moreMovies);
-        _hasMore = moreMovies.isNotEmpty;
-        _isLoadingMore = false;
-        _currentPage++;
-      });
+      if (mounted) {
+        setState(() {
+          _movies.addAll(moreMovies);
+          _hasMore = moreMovies.length == _limit;
+          _currentPage++;
+        });
+      }
     } catch (_) {
-      setState(() => _isLoadingMore = false);
+      // Do nothing
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingMore = false);
+      }
     }
   }
 
@@ -124,8 +152,16 @@ class _BollywoodPageState extends State<BollywoodPage> {
       _isLoading = true;
       _isServerError = false;
       _isOffline = false;
+      _isLoadingMore = false; // ✅ Add this line
     });
     await _fetchMovies();
+    // ✅ Force another fetch if content is short
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.position.maxScrollExtent <=
+          _scrollController.position.viewportDimension) {
+        _loadMoreMovies();
+      }
+    });
   }
 
   Widget _buildShimmer() {
@@ -183,7 +219,13 @@ class _BollywoodPageState extends State<BollywoodPage> {
                             ),
                             const SizedBox(height: 10),
                             TextButton(
-                              onPressed: _fetchMovies,
+                              onPressed: () {
+                                setState(() {
+                                  _isLoading = true;
+                                  _isServerError = false;
+                                });
+                                _fetchMovies();
+                              },
                               child: const Text(
                                 "Retry",
                                 style: TextStyle(

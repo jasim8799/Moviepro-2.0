@@ -25,7 +25,6 @@ class _HollywoodPageState extends State<HollywoodPage> {
   int _currentPage = 1;
   final int _limit = 20;
   final ScrollController _scrollController = ScrollController();
-  int _retryCount = 0;
 
   @override
   void initState() {
@@ -34,7 +33,7 @@ class _HollywoodPageState extends State<HollywoodPage> {
 
     _scrollController.addListener(() {
       if (_scrollController.position.pixels >=
-              _scrollController.position.maxScrollExtent - 100 &&
+              _scrollController.position.maxScrollExtent - 300 &&
           !_isLoadingMore &&
           _hasMore &&
           !_isOffline &&
@@ -54,39 +53,57 @@ class _HollywoodPageState extends State<HollywoodPage> {
       return;
     }
 
-    try {
-      final movies = await MovieFetchService.fetchMoviesByCategoryAndRegion(
-        'All',
-        'Hollywood',
-        page: _currentPage,
-        limit: _limit,
-      );
+    int retries = 0;
+    const maxRetries = 2;
+    bool success = false;
 
-      final serverError = MovieFetchService.hadServerError();
+    while (!success && retries <= maxRetries) {
+      try {
+        final movies = await MovieFetchService.fetchMoviesByCategoryAndRegion(
+          'All',
+          'Hollywood',
+          page: _currentPage,
+          limit: _limit,
+        );
 
-      setState(() {
-        _movies.addAll(movies);
-        _hasMore = movies.length == _limit;
-        _isServerError = serverError;
-        _isLoading = false;
-        _currentPage++;
-        _retryCount = 0;
-      });
-    } catch (_) {
-      if (_retryCount < 2) {
-        _retryCount++;
-        await Future.delayed(const Duration(seconds: 1));
-        _fetchMovies();
-      } else {
-        setState(() {
-          _isServerError = true;
-          _isLoading = false;
-        });
+        final serverError = MovieFetchService.hadServerError();
+
+        if (!serverError) {
+          setState(() {
+            _movies.addAll(movies);
+            _hasMore = movies.length == _limit;
+            _isServerError = false;
+            _isOffline = false;
+            _isLoading = false;
+            _currentPage++;
+          });
+          // 👇 Force load more if content is short (same as Bollywood)
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_scrollController.position.maxScrollExtent <=
+                _scrollController.position.viewportDimension) {
+              _loadMoreMovies();
+            }
+          });
+          success = true;
+        } else {
+          retries++;
+        }
+      } catch (_) {
+        retries++;
       }
+    }
+
+    if (!success) {
+      setState(() {
+        _isServerError = true;
+        _isLoading = false;
+      });
     }
   }
 
   Future<void> _loadMoreMovies() async {
+    if (_isLoadingMore || !_hasMore) return;
+
     setState(() => _isLoadingMore = true);
 
     try {
@@ -97,14 +114,19 @@ class _HollywoodPageState extends State<HollywoodPage> {
         limit: _limit,
       );
 
-      setState(() {
-        _movies.addAll(moreMovies);
-        _hasMore = moreMovies.isNotEmpty;
-        _isLoadingMore = false;
-        _currentPage++;
-      });
+      if (mounted) {
+        setState(() {
+          _movies.addAll(moreMovies);
+          _hasMore = moreMovies.length == _limit;
+          _currentPage++;
+        });
+      }
     } catch (_) {
-      setState(() => _isLoadingMore = false);
+      // silently fail
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingMore = false);
+      }
     }
   }
 
@@ -116,9 +138,16 @@ class _HollywoodPageState extends State<HollywoodPage> {
       _isLoading = true;
       _isServerError = false;
       _isOffline = false;
-      _retryCount = 0;
+      _isLoadingMore = false; // Optional: reset this too
     });
     await _fetchMovies();
+    // 👇 This ensures more movies load if content is short
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.position.maxScrollExtent <=
+          _scrollController.position.viewportDimension) {
+        _loadMoreMovies();
+      }
+    });
   }
 
   Widget _buildShimmerGrid() {
@@ -180,7 +209,6 @@ class _HollywoodPageState extends State<HollywoodPage> {
                                 setState(() {
                                   _isLoading = true;
                                   _isServerError = false;
-                                  _retryCount = 0;
                                 });
                                 _fetchMovies();
                               },

@@ -1,3 +1,4 @@
+// Your imports stay the same
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../models/movie.dart';
@@ -293,7 +294,7 @@ class _SeriesPageState extends State<SeriesPage> {
                             ),
                             const SizedBox(height: 10),
                             TextButton(
-                              onPressed: _fetchSeries,
+                              onPressed: () => _fetchSeries(),
                               child: const Text(
                                 "Retry",
                                 style: TextStyle(
