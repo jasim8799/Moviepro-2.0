@@ -181,7 +181,8 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
                           final related = relatedMovies[index];
                           return GestureDetector(
                             onTap: () {
-                              Navigator.of(context).push(
+                              //just change from push to pushreplacement
+                              Navigator.of(context).pushReplacement(
                                 MaterialPageRoute(
                                   builder:
                                       (_) => MovieDetailScreen(

@@ -1,3 +1,4 @@
+// ... [UNCHANGED IMPORTS]
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -118,10 +119,10 @@ class _MoviePlayerWidgetState extends State<MoviePlayerWidget> {
           'Cache-Control': 'no-cache',
         },
       );
-
       _videoPlayerController = controller;
 
       await controller.initialize();
+      WakelockPlus.enable(); // ✅ <--- ADD THIS LINE
 
       if (resumeFrom != null) {
         await controller.seekTo(resumeFrom);
@@ -249,6 +250,10 @@ class _MoviePlayerWidgetState extends State<MoviePlayerWidget> {
                       final currentPos =
                           _videoPlayerController?.value.position ??
                           Duration.zero;
+
+                      await _videoPlayerController?.pause();
+                      await _chewieController?.pause();
+
                       if (_currentVideoUrl != null) {
                         final result = await Navigator.push<Duration>(
                           context,
@@ -265,6 +270,9 @@ class _MoviePlayerWidgetState extends State<MoviePlayerWidget> {
                             _currentVideoUrl!,
                             resumeFrom: result,
                           );
+                        } else {
+                          // ✅ FIX ADDED HERE
+                          WakelockPlus.enable();
                         }
                       }
                     },

@@ -73,6 +73,7 @@ class _FullScreenVideoPageState extends State<FullScreenVideoPage> {
           'Cache-Control': 'no-cache',
           'Accept-Encoding': 'identity',
         },
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
       );
       _controller = controller;
       await controller.initialize();

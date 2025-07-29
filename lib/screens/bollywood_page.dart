@@ -276,6 +276,7 @@ class _BollywoodPageState extends State<BollywoodPage> {
                             final movie = _movies[index];
                             return GestureDetector(
                               onTap: () {
+                                //just change line from push to pushreplacement
                                 Navigator.of(context).push(
                                   MaterialPageRoute(
                                     builder:
